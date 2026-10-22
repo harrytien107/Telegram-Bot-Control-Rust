@@ -1,5 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
+
+use crate::remote;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LocalCommand {
@@ -32,13 +34,11 @@ pub fn execute(command: LocalCommand, download_dir: &str) -> Result<String, Stri
             Ok("PC lock requested".to_owned())
         }
         LocalCommand::MonitorOff => {
-            let nircmd = find_nircmd()?;
-            spawn_path(&nircmd, &["monitor", "off"])?;
+            remote::monitor_off()?;
             Ok("Monitor-off requested".to_owned())
         }
         LocalCommand::Mute => {
-            let nircmd = find_nircmd()?;
-            spawn_path(&nircmd, &["mutesysvolume", "1"])?;
+            remote::mute(true)?;
             Ok("System audio muted".to_owned())
         }
         LocalCommand::OpenBrowser => {
@@ -82,29 +82,7 @@ fn screenshot(download_dir: &str) -> Result<String, String> {
     Ok(format!("Screenshot saved to {}", path.display()))
 }
 
-fn find_nircmd() -> Result<PathBuf, String> {
-    let candidates = [
-        PathBuf::from("nircmd-x64\\nircmd.exe"),
-        PathBuf::from("..\\nircmd-x64\\nircmd.exe"),
-    ];
-    candidates
-        .into_iter()
-        .find(|path| path.exists())
-        .ok_or_else(|| "nircmd.exe was not found in nircmd-x64".to_owned())
-}
-
 fn spawn(program: &str, args: &[&str]) -> Result<(), String> {
-    Command::new(program)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map(|_| ())
-        .map_err(|error| error.to_string())
-}
-
-fn spawn_path(program: &Path, args: &[&str]) -> Result<(), String> {
     Command::new(program)
         .args(args)
         .stdin(Stdio::null())

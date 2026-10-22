@@ -26,9 +26,8 @@ This repository contains a Rust rewrite of the original Python-based Telegram PC
 - Rust toolchain with the MSVC target
 - Visual Studio Build Tools / MSVC with `rc.exe`
 - A Telegram bot token from `@BotFather`
-- [NirCmd](https://www.nirsoft.net/utils/nircmd.html) for volume, mute and monitor-off commands
 
-No Python, Selenium, browser driver, or Python virtual environment is required.
+No Python, NirCmd, Selenium, browser driver, or Python virtual environment is required.
 
 ## Build
 
@@ -46,27 +45,6 @@ rust-gui\target\release\telegram-control-gui.exe
 ```
 
 The release profile is configured for a small binary using size optimization, Thin LTO, a single codegen unit, symbol stripping, and `panic = "abort"`.
-
-## NirCmd
-
-Download NirCmd from NirSoft and place either `nircmdc.exe` or `nircmd.exe` in:
-
-```text
-nircmd-x64\nircmdc.exe
-nircmd-x64\nircmd.exe
-```
-
-A portable folder can look like this:
-
-```text
-TelegramRemoteControl\
-├─ telegram-control-gui.exe
-├─ config.toml
-└─ nircmd-x64\
-   └─ nircmdc.exe
-```
-
-NirCmd itself is not bundled in this repository.
 
 ## First Run
 
@@ -117,7 +95,7 @@ when finished.
 
 ## Portable Data
 
-Runtime data such as `config.toml`, screenshots, downloads and NirCmd binaries stay outside Git. Build output under `target/` and packaged executables under `dist/` are ignored as well.
+Runtime data such as `config.toml`, screenshots and downloads stay outside Git. Build output under `target/` and packaged executables under `dist/` are ignored as well.
 
 ## Security
 

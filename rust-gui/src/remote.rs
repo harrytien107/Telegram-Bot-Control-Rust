@@ -1,3 +1,4 @@
+use std::ffi::c_void;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -13,7 +14,42 @@ unsafe extern "system" {
     fn SetCursorPos(x: i32, y: i32) -> i32;
     fn mouse_event(flags: u32, dx: u32, dy: u32, data: u32, extra_info: usize);
     fn keybd_event(vk: u8, scan: u8, flags: u32, extra_info: usize);
+    fn SendMessageW(hwnd: isize, msg: u32, wparam: usize, lparam: isize) -> isize;
 }
+
+#[link(name = "ole32")]
+unsafe extern "system" {
+    fn CoInitializeEx(reserved: *mut c_void, coinit: u32) -> i32;
+    fn CoUninitialize();
+    fn CoCreateInstance(
+        clsid: *const NativeGuid,
+        outer: *mut c_void,
+        context: u32,
+        iid: *const NativeGuid,
+        object: *mut *mut c_void,
+    ) -> i32;
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct NativeGuid {
+    data1: u32,
+    data2: u16,
+    data3: u16,
+    data4: [u8; 8],
+}
+
+const CLSID_MMDEVICE_ENUMERATOR: NativeGuid = NativeGuid { data1: 0xbcde0395, data2: 0xe52f, data3: 0x467c, data4: [0x8e, 0x3d, 0xc4, 0x57, 0x92, 0x91, 0x69, 0x2e] };
+const IID_IMMDEVICE_ENUMERATOR: NativeGuid = NativeGuid { data1: 0xa95664d2, data2: 0x9614, data3: 0x4f35, data4: [0xa7, 0x46, 0xde, 0x8d, 0xb6, 0x36, 0x17, 0xe6] };
+const IID_IAUDIO_ENDPOINT_VOLUME: NativeGuid = NativeGuid { data1: 0x5cdf2c82, data2: 0x841e, data3: 0x4546, data4: [0x97, 0x22, 0x0c, 0xf7, 0x40, 0x78, 0x22, 0x9a] };
+
+const COINIT_APARTMENTTHREADED: u32 = 0x2;
+const CLSCTX_ALL: u32 = 23;
+const E_RENDER: i32 = 0;
+const E_MULTIMEDIA: i32 = 1;
+const WM_SYSCOMMAND: u32 = 0x0112;
+const SC_MONITORPOWER: usize = 0xF170;
+const HWND_BROADCAST: isize = 0xffff;
 
 const MOUSE_LEFT_DOWN: u32 = 0x0002;
 const MOUSE_LEFT_UP: u32 = 0x0004;
@@ -263,56 +299,38 @@ pub fn mouse_scroll(delta: i32) -> Result<(), String> {
 }
 
 pub fn set_volume(percent: u32) -> Result<(), String> {
-    let v = ((percent.min(100) as f64) * 655.35) as u32;
-    nircmd(&["setsysvolume", &v.to_string()])
+    with_endpoint_volume(|endpoint| unsafe {
+        let vtable = *(endpoint as *mut *mut *mut c_void);
+        let set_scalar: unsafe extern "system" fn(*mut c_void, f32, *const NativeGuid) -> i32 =
+            std::mem::transmute(*vtable.add(7));
+        hresult(set_scalar(endpoint, percent.min(100) as f32 / 100.0, std::ptr::null()), "SetMasterVolumeLevelScalar")
+    })
 }
 pub fn change_volume(delta: i32) -> Result<(), String> {
-    nircmd(&["changesysvolume", &delta.to_string()])
+    let current = current_volume_percent()? as i32;
+    set_volume((current + delta).clamp(0, 100) as u32)
 }
 pub fn current_volume_percent() -> Result<u32, String> {
-    let value = run_powershell(
-        r#"$src=@"
-using System;
-using System.Runtime.InteropServices;
-public enum EDataFlow { eRender, eCapture, eAll }
-public enum ERole { eConsole, eMultimedia, eCommunications }
-[ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] public class MMDeviceEnumeratorComObject {}
-[ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-public interface IMMDeviceEnumerator { int NotImpl1(); [PreserveSig] int GetDefaultAudioEndpoint(EDataFlow dataFlow, ERole role, out IMMDevice ppDevice); }
-[ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-public interface IMMDevice { [PreserveSig] int Activate(ref Guid iid, int dwClsCtx, IntPtr pActivationParams, [MarshalAs(UnmanagedType.IUnknown)] out object ppInterface); }
-[ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-public interface IAudioEndpointVolume {
- int RegisterControlChangeNotify(IntPtr pNotify);
- int UnregisterControlChangeNotify(IntPtr pNotify);
- int GetChannelCount(out uint channelCount);
- int SetMasterVolumeLevel(float levelDB, Guid eventContext);
- int SetMasterVolumeLevelScalar(float level, Guid eventContext);
- int GetMasterVolumeLevel(out float levelDB);
- int GetMasterVolumeLevelScalar(out float level);
-}
-public static class AudioVolume {
- public static int Get() {
-  var e=(IMMDeviceEnumerator)(new MMDeviceEnumeratorComObject());
-  IMMDevice d; Marshal.ThrowExceptionForHR(e.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eMultimedia, out d));
-  object o; var iid=typeof(IAudioEndpointVolume).GUID; Marshal.ThrowExceptionForHR(d.Activate(ref iid, 23, IntPtr.Zero, out o));
-  float v; Marshal.ThrowExceptionForHR(((IAudioEndpointVolume)o).GetMasterVolumeLevelScalar(out v));
-  return (int)Math.Round(v*100);
- }
-}
-"@; Add-Type -TypeDefinition $src; [AudioVolume]::Get()"#,
-    )?;
-    value
-        .trim()
-        .parse::<u32>()
-        .map(|v| v.min(100))
-        .map_err(|e| format!("Không đọc được âm lượng hiện tại: {e}"))
+    with_endpoint_volume(|endpoint| unsafe {
+        let vtable = *(endpoint as *mut *mut *mut c_void);
+        let get_scalar: unsafe extern "system" fn(*mut c_void, *mut f32) -> i32 =
+            std::mem::transmute(*vtable.add(9));
+        let mut value = 0.0f32;
+        hresult(get_scalar(endpoint, &mut value), "GetMasterVolumeLevelScalar")?;
+        Ok((value.clamp(0.0, 1.0) * 100.0).round() as u32)
+    })
 }
 pub fn mute(muted: bool) -> Result<(), String> {
-    nircmd(&["mutesysvolume", if muted { "1" } else { "0" }])
+    with_endpoint_volume(|endpoint| unsafe {
+        let vtable = *(endpoint as *mut *mut *mut c_void);
+        let set_mute: unsafe extern "system" fn(*mut c_void, i32, *const NativeGuid) -> i32 =
+            std::mem::transmute(*vtable.add(14));
+        hresult(set_mute(endpoint, muted as i32, std::ptr::null()), "SetMute")
+    })
 }
 pub fn monitor_off() -> Result<(), String> {
-    nircmd(&["monitor", "off"])
+    unsafe { SendMessageW(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, 2); }
+    Ok(())
 }
 pub fn brightness(percent: u32) -> Result<(), String> {
     run_powershell(&format!("(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1,{})", percent.min(100))).map(|_| ())
@@ -496,36 +514,64 @@ pub fn system_command(name: &str) -> Result<String, String> {
 pub fn aliases() -> &'static str {
     "chrome, brave, thorium, spotify, discord"
 }
-fn nircmd(args: &[&str]) -> Result<(), String> {
-    let exe = find_nircmd().ok_or_else(|| {
-        "nircmdc.exe was not found. Put nircmd-x64 next to the portable app folder.".to_owned()
-    })?;
-    spawn(exe.to_string_lossy().as_ref(), args)
+fn with_endpoint_volume<T>(f: impl FnOnce(*mut c_void) -> Result<T, String>) -> Result<T, String> {
+    unsafe {
+        let init = CoInitializeEx(std::ptr::null_mut(), COINIT_APARTMENTTHREADED);
+        let should_uninit = init >= 0;
+        if init < 0 && init != -2147417850 {
+            return Err(format!("CoInitializeEx failed: 0x{:08X}", init as u32));
+        }
+
+        let result = (|| {
+            let mut enumerator = std::ptr::null_mut();
+            hresult(
+                CoCreateInstance(
+                    &CLSID_MMDEVICE_ENUMERATOR,
+                    std::ptr::null_mut(),
+                    CLSCTX_ALL,
+                    &IID_IMMDEVICE_ENUMERATOR,
+                    &mut enumerator,
+                ),
+                "CoCreateInstance(MMDeviceEnumerator)",
+            )?;
+
+            let enum_vtable = *(enumerator as *mut *mut *mut c_void);
+            let get_default: unsafe extern "system" fn(*mut c_void, i32, i32, *mut *mut c_void) -> i32 =
+                std::mem::transmute(*enum_vtable.add(4));
+            let mut device = std::ptr::null_mut();
+            let hr = get_default(enumerator, E_RENDER, E_MULTIMEDIA, &mut device);
+            release_com(enumerator);
+            hresult(hr, "GetDefaultAudioEndpoint")?;
+
+            let device_vtable = *(device as *mut *mut *mut c_void);
+            let activate: unsafe extern "system" fn(*mut c_void, *const NativeGuid, u32, *mut c_void, *mut *mut c_void) -> i32 =
+                std::mem::transmute(*device_vtable.add(3));
+            let mut endpoint = std::ptr::null_mut();
+            let hr = activate(device, &IID_IAUDIO_ENDPOINT_VOLUME, CLSCTX_ALL, std::ptr::null_mut(), &mut endpoint);
+            release_com(device);
+            hresult(hr, "IMMDevice::Activate(IAudioEndpointVolume)")?;
+
+            let out = f(endpoint);
+            release_com(endpoint);
+            out
+        })();
+
+        if should_uninit {
+            CoUninitialize();
+        }
+        result
+    }
 }
-fn find_nircmd() -> Option<PathBuf> {
-    let mut roots = Vec::new();
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(p) = exe.parent() {
-            roots.extend(p.ancestors().take(6).map(Path::to_path_buf));
-        }
-    }
-    if let Ok(cwd) = std::env::current_dir() {
-        roots.extend(cwd.ancestors().take(4).map(Path::to_path_buf));
-    }
-    for root in roots {
-        for rel in [
-            "nircmd-x64/nircmdc.exe",
-            "nircmd-x64/nircmd.exe",
-            "nircmdc.exe",
-            "nircmd.exe",
-        ] {
-            let p = root.join(rel);
-            if p.exists() {
-                return Some(p);
-            }
-        }
-    }
-    None
+
+unsafe fn release_com(object: *mut c_void) {
+    if object.is_null() { return; }
+    let vtable = unsafe { *(object as *mut *mut *mut c_void) };
+    let release: unsafe extern "system" fn(*mut c_void) -> u32 = unsafe { std::mem::transmute(*vtable.add(2)) };
+    unsafe { release(object); }
+}
+
+fn hresult(hr: i32, operation: &str) -> Result<(), String> {
+    if hr >= 0 { Ok(()) } else { Err(format!("{operation} failed: 0x{:08X}", hr as u32)) }
 }
 fn spawn(program: &str, args: &[&str]) -> Result<(), String> {
     let mut cmd = Command::new(program);
