@@ -15,6 +15,56 @@ unsafe extern "system" {
     fn mouse_event(flags: u32, dx: u32, dy: u32, data: u32, extra_info: usize);
     fn keybd_event(vk: u8, scan: u8, flags: u32, extra_info: usize);
     fn SendMessageW(hwnd: isize, msg: u32, wparam: usize, lparam: isize) -> isize;
+    fn OpenClipboard(hwnd: isize) -> i32;
+    fn CloseClipboard() -> i32;
+    fn EmptyClipboard() -> i32;
+    fn GetClipboardData(format: u32) -> isize;
+    fn SetClipboardData(format: u32, memory: isize) -> isize;
+    fn EnumWindows(callback: Option<unsafe extern "system" fn(isize, isize) -> i32>, lparam: isize) -> i32;
+    fn IsWindowVisible(hwnd: isize) -> i32;
+    fn GetWindowTextLengthW(hwnd: isize) -> i32;
+    fn GetWindowTextW(hwnd: isize, text: *mut u16, max_count: i32) -> i32;
+    fn GetWindowThreadProcessId(hwnd: isize, process_id: *mut u32) -> u32;
+    fn GetDC(hwnd: isize) -> isize;
+    fn GetWindowDC(hwnd: isize) -> isize;
+    fn GetDesktopWindow() -> isize;
+    fn ReleaseDC(hwnd: isize, dc: isize) -> i32;
+    fn GetSystemMetrics(index: i32) -> i32;
+}
+
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn GlobalAlloc(flags: u32, bytes: usize) -> isize;
+    fn GlobalFree(memory: isize) -> isize;
+    fn GlobalLock(memory: isize) -> *mut c_void;
+    fn GlobalUnlock(memory: isize) -> i32;
+    fn GlobalSize(memory: isize) -> usize;
+    fn CreateToolhelp32Snapshot(flags: u32, process_id: u32) -> isize;
+    fn Process32FirstW(snapshot: isize, entry: *mut ProcessEntry32W) -> i32;
+    fn Process32NextW(snapshot: isize, entry: *mut ProcessEntry32W) -> i32;
+    fn OpenProcess(desired_access: u32, inherit_handle: i32, process_id: u32) -> isize;
+    fn TerminateProcess(process: isize, exit_code: u32) -> i32;
+    fn CloseHandle(handle: isize) -> i32;
+    fn GetLastError() -> u32;
+}
+
+#[link(name = "gdi32")]
+unsafe extern "system" {
+    fn CreateCompatibleDC(dc: isize) -> isize;
+    fn CreateCompatibleBitmap(dc: isize, width: i32, height: i32) -> isize;
+    fn SelectObject(dc: isize, object: isize) -> isize;
+    fn BitBlt(dest: isize, x: i32, y: i32, width: i32, height: i32, src: isize, src_x: i32, src_y: i32, rop: u32) -> i32;
+    fn DeleteObject(object: isize) -> i32;
+    fn DeleteDC(dc: isize) -> i32;
+}
+
+#[link(name = "gdiplus")]
+unsafe extern "system" {
+    fn GdiplusStartup(token: *mut usize, input: *const GdiplusStartupInput, output: *mut c_void) -> i32;
+    fn GdiplusShutdown(token: usize);
+    fn GdipCreateBitmapFromHBITMAP(bitmap: isize, palette: isize, image: *mut *mut c_void) -> i32;
+    fn GdipSaveImageToFile(image: *mut c_void, filename: *const u16, encoder: *const NativeGuid, params: *const c_void) -> i32;
+    fn GdipDisposeImage(image: *mut c_void) -> i32;
 }
 
 #[link(name = "ole32")]
@@ -39,9 +89,32 @@ struct NativeGuid {
     data4: [u8; 8],
 }
 
+#[repr(C)]
+struct ProcessEntry32W {
+    size: u32,
+    usage: u32,
+    process_id: u32,
+    default_heap_id: usize,
+    module_id: u32,
+    threads: u32,
+    parent_process_id: u32,
+    base_priority: i32,
+    flags: u32,
+    exe_file: [u16; 260],
+}
+
+#[repr(C)]
+struct GdiplusStartupInput {
+    version: u32,
+    debug_callback: *mut c_void,
+    suppress_background_thread: i32,
+    suppress_external_codecs: i32,
+}
+
 const CLSID_MMDEVICE_ENUMERATOR: NativeGuid = NativeGuid { data1: 0xbcde0395, data2: 0xe52f, data3: 0x467c, data4: [0x8e, 0x3d, 0xc4, 0x57, 0x92, 0x91, 0x69, 0x2e] };
 const IID_IMMDEVICE_ENUMERATOR: NativeGuid = NativeGuid { data1: 0xa95664d2, data2: 0x9614, data3: 0x4f35, data4: [0xa7, 0x46, 0xde, 0x8d, 0xb6, 0x36, 0x17, 0xe6] };
 const IID_IAUDIO_ENDPOINT_VOLUME: NativeGuid = NativeGuid { data1: 0x5cdf2c82, data2: 0x841e, data3: 0x4546, data4: [0x97, 0x22, 0x0c, 0xf7, 0x40, 0x78, 0x22, 0x9a] };
+const CLSID_PNG_ENCODER: NativeGuid = NativeGuid { data1: 0x557cf406, data2: 0x1a04, data3: 0x11d3, data4: [0x9a, 0x73, 0x00, 0x00, 0xf8, 0x1e, 0xf3, 0x2e] };
 
 const COINIT_APARTMENTTHREADED: u32 = 0x2;
 const CLSCTX_ALL: u32 = 23;
@@ -57,7 +130,17 @@ const MOUSE_RIGHT_DOWN: u32 = 0x0008;
 const MOUSE_RIGHT_UP: u32 = 0x0010;
 const MOUSE_WHEEL: u32 = 0x0800;
 const KEYEVENTF_KEYUP: u32 = 0x0002;
+const CF_UNICODETEXT: u32 = 13;
+const GMEM_MOVEABLE: u32 = 0x0002;
+const TH32CS_SNAPPROCESS: u32 = 0x0000_0002;
+const PROCESS_TERMINATE: u32 = 0x0001;
+const INVALID_HANDLE_VALUE: isize = -1;
+const SRCCOPY: u32 = 0x00CC_0020;
+const SM_CXSCREEN: i32 = 0;
+const SM_CYSCREEN: i32 = 1;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::ffi::OsStrExt;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
@@ -101,26 +184,6 @@ pub fn run_powershell(script: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
-pub fn run_powershell_env(script: &str, key: &str, value: &str) -> Result<String, String> {
-    let mut cmd = Command::new("powershell.exe");
-    cmd.args(["-NoProfile", "-NonInteractive", "-Command", script])
-        .env(key, value)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    hide_console(&mut cmd);
-    let output = cmd.output().map_err(|e| e.to_string())?;
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        return Err(if err.is_empty() {
-            format!("PowerShell exited with {}", output.status)
-        } else {
-            err
-        });
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
-}
-
 pub fn status_text() -> Result<String, String> {
     run_powershell(
         r#"$cpu=(Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average; $os=Get-CimInstance Win32_OperatingSystem; $ramTotal=[math]::Round($os.TotalVisibleMemorySize/1MB,1); $ramUsed=[math]::Round(($os.TotalVisibleMemorySize-$os.FreePhysicalMemory)/1MB,1); $ramPct=if($os.TotalVisibleMemorySize){[math]::Round((($os.TotalVisibleMemorySize-$os.FreePhysicalMemory)/$os.TotalVisibleMemorySize)*100,0)}else{0}; $d=Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"; $diskTotal=[math]::Round($d.Size/1GB,1); $diskUsed=[math]::Round(($d.Size-$d.FreeSpace)/1GB,1); $diskPct=if($d.Size){[math]::Round((($d.Size-$d.FreeSpace)/$d.Size)*100,0)}else{0}; $uptime=(Get-Date)-$os.LastBootUpTime; $b=Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1; $battery=if($b){"$($b.EstimatedChargeRemaining)%"}else{"Không có pin"}; "CPU: $cpu%`nRAM: $ramPct% ($ramUsed/$ramTotal GiB)`nDisk C: $diskPct% ($diskUsed/$diskTotal GiB)`nUptime: $([int]$uptime.TotalDays)d $($uptime.Hours)h $($uptime.Minutes)m`nBattery: $battery`nUser: $env:USERNAME`nHostname: $env:COMPUTERNAME""#,
@@ -140,14 +203,53 @@ pub fn uptime_text() -> Result<String, String> {
 }
 
 pub fn clipboard_get() -> Result<String, String> {
-    run_powershell("Get-Clipboard -Raw")
+    with_clipboard(|| unsafe {
+        let memory = GetClipboardData(CF_UNICODETEXT);
+        if memory == 0 {
+            return Err("Clipboard does not contain Unicode text".to_owned());
+        }
+        let ptr = GlobalLock(memory) as *const u16;
+        if ptr.is_null() {
+            return Err("GlobalLock(GetClipboardData) failed".to_owned());
+        }
+        let max_units = GlobalSize(memory) / std::mem::size_of::<u16>();
+        let slice = std::slice::from_raw_parts(ptr, max_units);
+        let len = slice.iter().position(|&value| value == 0).unwrap_or(max_units);
+        let text = String::from_utf16_lossy(&slice[..len]);
+        GlobalUnlock(memory);
+        Ok(text)
+    })
 }
 pub fn clipboard_set(text: &str) -> Result<(), String> {
-    run_powershell_env("Set-Clipboard -Value $env:TG_TEXT", "TG_TEXT", text).map(|_| ())
+    let mut wide = text.encode_utf16().collect::<Vec<_>>();
+    wide.push(0);
+    with_clipboard(|| unsafe {
+        if EmptyClipboard() == 0 {
+            return Err("EmptyClipboard failed".to_owned());
+        }
+        let bytes = wide.len() * std::mem::size_of::<u16>();
+        let memory = GlobalAlloc(GMEM_MOVEABLE, bytes);
+        if memory == 0 {
+            return Err("GlobalAlloc failed".to_owned());
+        }
+        let ptr = GlobalLock(memory) as *mut u16;
+        if ptr.is_null() {
+            GlobalFree(memory);
+            return Err("GlobalLock failed".to_owned());
+        }
+        std::ptr::copy_nonoverlapping(wide.as_ptr(), ptr, wide.len());
+        GlobalUnlock(memory);
+        if SetClipboardData(CF_UNICODETEXT, memory) == 0 {
+            GlobalFree(memory);
+            return Err("SetClipboardData failed".to_owned());
+        }
+        Ok(())
+    })
 }
 
 pub fn type_text(text: &str) -> Result<(), String> {
-    run_powershell_env("Set-Clipboard -Value $env:TG_TEXT; Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^v')", "TG_TEXT", text).map(|_| ())
+    clipboard_set(text)?;
+    key_press("ctrl+v")
 }
 
 pub fn key_press(key: &str) -> Result<(), String> {
@@ -235,14 +337,14 @@ fn virtual_key(key: &str) -> Option<u8> {
 }
 
 pub fn media_key(vk: u8) -> Result<(), String> {
-    let script = format!(
-        "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class K {{ [DllImport(\"user32.dll\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo); }}'; [K]::keybd_event({vk},0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 40; [K]::keybd_event({vk},0,2,[UIntPtr]::Zero)"
-    );
-    run_powershell(&script).map(|_| ())
+    unsafe { keybd_event(vk, 0, 0, 0); }
+    std::thread::sleep(std::time::Duration::from_millis(40));
+    unsafe { keybd_event(vk, 0, KEYEVENTF_KEYUP, 0); }
+    Ok(())
 }
 
 pub fn video_key(key: &str) -> Result<(), String> {
-    run_powershell_env("Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait($env:TG_KEY)", "TG_KEY", key).map(|_| ())
+    key_press(key)
 }
 
 pub fn mouse_action(action: &str) -> Result<(), String> {
@@ -371,11 +473,7 @@ pub fn screenshot(download_dir: &str) -> Result<PathBuf, String> {
     };
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = dir.join(format!("screenshot_{}.png", unix_seconds()));
-    run_powershell_env(
-        "$p=$env:TG_PATH; Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $bmp=New-Object System.Drawing.Bitmap $b.Width,$b.Height; $g=[System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($b.Location,[System.Drawing.Point]::Empty,$b.Size); $bmp.Save($p,[System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $bmp.Dispose()",
-        "TG_PATH",
-        &path.to_string_lossy(),
-    )?;
+    capture_screen_png(&path)?;
     Ok(path)
 }
 
@@ -415,12 +513,34 @@ pub fn list_directory(path: &str) -> Result<String, String> {
 }
 
 pub fn windows_list() -> Result<String, String> {
-    run_powershell(
-        "Get-Process | Where-Object {$_.MainWindowTitle} | Select-Object ProcessName,Id,MainWindowTitle | Format-Table -AutoSize | Out-String -Width 300",
-    )
+    let windows = visible_windows()?;
+    let names = process_list()?.into_iter().map(|(name, pid)| (pid, name)).collect::<std::collections::HashMap<_, _>>();
+    if windows.is_empty() {
+        return Ok("Không có cửa sổ hiển thị.".to_owned());
+    }
+    Ok(windows.into_iter().map(|(pid, title)| {
+        let name = names.get(&pid).map(String::as_str).unwrap_or("unknown.exe");
+        format!("{name} | PID {pid} | {title}")
+    }).collect::<Vec<_>>().join("\n"))
 }
 pub fn close_window(title: &str) -> Result<(), String> {
-    run_powershell_env("$t=$env:TG_TITLE; Get-Process | Where-Object {$_.MainWindowTitle -like \"*$t*\"} | Stop-Process -Force", "TG_TITLE", title).map(|_| ())
+    let needle = title.trim().to_ascii_lowercase();
+    if needle.is_empty() {
+        return Err("Window title is empty".to_owned());
+    }
+    let mut matched = std::collections::HashSet::new();
+    for (pid, window_title) in visible_windows()? {
+        if window_title.to_ascii_lowercase().contains(&needle) {
+            matched.insert(pid);
+        }
+    }
+    if matched.is_empty() {
+        return Err(format!("Không tìm thấy cửa sổ chứa: {title}"));
+    }
+    for pid in matched {
+        terminate_process(pid)?;
+    }
+    Ok(())
 }
 
 pub fn open_url(url: &str) -> Result<(), String> {
@@ -484,17 +604,36 @@ pub fn kill_pid(pid: u32) -> Result<(), String> {
 }
 
 pub fn process_list() -> Result<Vec<(String, u32)>, String> {
-    let text = run_powershell(
-        "Get-Process | Sort-Object ProcessName | ForEach-Object { \"$($_.ProcessName).exe|$($_.Id)\" }",
-    )?;
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if snapshot == INVALID_HANDLE_VALUE {
+        return Err("CreateToolhelp32Snapshot failed".to_owned());
+    }
+    let mut entry = ProcessEntry32W {
+        size: std::mem::size_of::<ProcessEntry32W>() as u32,
+        usage: 0,
+        process_id: 0,
+        default_heap_id: 0,
+        module_id: 0,
+        threads: 0,
+        parent_process_id: 0,
+        base_priority: 0,
+        flags: 0,
+        exe_file: [0; 260],
+    };
     let mut out = Vec::new();
-    for line in text.lines() {
-        if let Some((n, p)) = line.rsplit_once('|') {
-            if let Ok(pid) = p.parse() {
-                out.push((n.to_owned(), pid))
+    unsafe {
+        if Process32FirstW(snapshot, &mut entry) != 0 {
+            loop {
+                let len = entry.exe_file.iter().position(|&c| c == 0).unwrap_or(entry.exe_file.len());
+                out.push((String::from_utf16_lossy(&entry.exe_file[..len]), entry.process_id));
+                if Process32NextW(snapshot, &mut entry) == 0 {
+                    break;
+                }
             }
         }
+        CloseHandle(snapshot);
     }
+    out.sort_by(|a, b| a.0.to_ascii_lowercase().cmp(&b.0.to_ascii_lowercase()).then(a.1.cmp(&b.1)));
     Ok(out)
 }
 pub fn system_command(name: &str) -> Result<String, String> {
@@ -514,6 +653,140 @@ pub fn system_command(name: &str) -> Result<String, String> {
 pub fn aliases() -> &'static str {
     "chrome, brave, thorium, spotify, discord"
 }
+
+fn with_clipboard<T>(f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    let mut opened = false;
+    for _ in 0..10 {
+        if unsafe { OpenClipboard(0) } != 0 {
+            opened = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    if !opened {
+        return Err("OpenClipboard failed".to_owned());
+    }
+    let result = f();
+    unsafe { CloseClipboard(); }
+    result
+}
+
+fn capture_screen_png(path: &Path) -> Result<(), String> {
+    let width = unsafe { GetSystemMetrics(SM_CXSCREEN) };
+    let height = unsafe { GetSystemMetrics(SM_CYSCREEN) };
+    if width <= 0 || height <= 0 {
+        return Err("GetSystemMetrics returned an invalid screen size".to_owned());
+    }
+
+    unsafe {
+        let desktop = GetDesktopWindow();
+        let screen_dc = GetWindowDC(desktop);
+        if screen_dc == 0 {
+            return Err(format!("GetWindowDC failed: {}", GetLastError()));
+        }
+        let memory_dc = CreateCompatibleDC(screen_dc);
+        if memory_dc == 0 {
+            ReleaseDC(desktop, screen_dc);
+            return Err(format!("CreateCompatibleDC failed: {}", GetLastError()));
+        }
+        let bitmap = CreateCompatibleBitmap(screen_dc, width, height);
+        if bitmap == 0 {
+            DeleteDC(memory_dc);
+            ReleaseDC(desktop, screen_dc);
+            return Err(format!("CreateCompatibleBitmap failed: {}", GetLastError()));
+        }
+        let previous = SelectObject(memory_dc, bitmap);
+        let copied = BitBlt(memory_dc, 0, 0, width, height, screen_dc, 0, 0, SRCCOPY);
+        if previous != 0 {
+            SelectObject(memory_dc, previous);
+        }
+        DeleteDC(memory_dc);
+        ReleaseDC(desktop, screen_dc);
+        if copied == 0 {
+            let error = GetLastError();
+            DeleteObject(bitmap);
+            return Err(format!("BitBlt failed: {error}"));
+        }
+
+        let input = GdiplusStartupInput {
+            version: 1,
+            debug_callback: std::ptr::null_mut(),
+            suppress_background_thread: 0,
+            suppress_external_codecs: 0,
+        };
+        let mut token = 0usize;
+        let status = GdiplusStartup(&mut token, &input, std::ptr::null_mut());
+        if status != 0 {
+            DeleteObject(bitmap);
+            return Err(format!("GdiplusStartup failed: {status}"));
+        }
+        let result = (|| {
+            let mut image = std::ptr::null_mut();
+            let status = GdipCreateBitmapFromHBITMAP(bitmap, 0, &mut image);
+            if status != 0 || image.is_null() {
+                return Err(format!("GdipCreateBitmapFromHBITMAP failed: {status}"));
+            }
+            let mut filename = path.as_os_str().encode_wide().collect::<Vec<_>>();
+            filename.push(0);
+            let status = GdipSaveImageToFile(image, filename.as_ptr(), &CLSID_PNG_ENCODER, std::ptr::null());
+            GdipDisposeImage(image);
+            if status != 0 {
+                return Err(format!("GdipSaveImageToFile failed: {status}"));
+            }
+            Ok(())
+        })();
+        GdiplusShutdown(token);
+        DeleteObject(bitmap);
+        result
+    }
+}
+
+fn visible_windows() -> Result<Vec<(u32, String)>, String> {
+    unsafe extern "system" fn collect(hwnd: isize, lparam: isize) -> i32 {
+        unsafe {
+            if IsWindowVisible(hwnd) == 0 {
+                return 1;
+            }
+            let len = GetWindowTextLengthW(hwnd);
+            if len <= 0 {
+                return 1;
+            }
+            let mut text = vec![0u16; len as usize + 1];
+            let copied = GetWindowTextW(hwnd, text.as_mut_ptr(), text.len() as i32);
+            if copied <= 0 {
+                return 1;
+            }
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(hwnd, &mut pid);
+            let windows = &mut *(lparam as *mut Vec<(u32, String)>);
+            windows.push((pid, String::from_utf16_lossy(&text[..copied as usize])));
+            1
+        }
+    }
+
+    let mut windows: Vec<(u32, String)> = Vec::new();
+    let ok = unsafe { EnumWindows(Some(collect), (&mut windows as *mut Vec<(u32, String)>) as isize) };
+    if ok == 0 {
+        return Err("EnumWindows failed".to_owned());
+    }
+    windows.sort_by(|a, b| a.1.to_ascii_lowercase().cmp(&b.1.to_ascii_lowercase()));
+    Ok(windows)
+}
+
+fn terminate_process(pid: u32) -> Result<(), String> {
+    let process = unsafe { OpenProcess(PROCESS_TERMINATE, 0, pid) };
+    if process == 0 {
+        return Err(format!("OpenProcess failed for PID {pid}"));
+    }
+    let ok = unsafe { TerminateProcess(process, 1) };
+    unsafe { CloseHandle(process); }
+    if ok == 0 {
+        Err(format!("TerminateProcess failed for PID {pid}"))
+    } else {
+        Ok(())
+    }
+}
+
 fn with_endpoint_volume<T>(f: impl FnOnce(*mut c_void) -> Result<T, String>) -> Result<T, String> {
     unsafe {
         let init = CoInitializeEx(std::ptr::null_mut(), COINIT_APARTMENTTHREADED);

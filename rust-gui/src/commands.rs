@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use crate::remote;
@@ -56,29 +55,7 @@ pub fn execute(command: LocalCommand, download_dir: &str) -> Result<String, Stri
 }
 
 fn screenshot(download_dir: &str) -> Result<String, String> {
-    let dir = PathBuf::from(download_dir);
-    std::fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
-    let path = dir.join("screenshot.png");
-    let escaped = path.to_string_lossy().replace('\'', "''");
-    let script = format!(
-        "Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; \
-         $b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; \
-         $bmp=New-Object System.Drawing.Bitmap $b.Width,$b.Height; \
-         $g=[System.Drawing.Graphics]::FromImage($bmp); \
-         $g.CopyFromScreen($b.Location,[System.Drawing.Point]::Empty,$b.Size); \
-         $bmp.Save('{escaped}',[System.Drawing.Imaging.ImageFormat]::Png); \
-         $g.Dispose(); $bmp.Dispose()"
-    );
-    let status = Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map_err(|error| error.to_string())?;
-    if !status.success() {
-        return Err(format!("Screenshot command exited with {status}"));
-    }
+    let path = remote::screenshot(download_dir)?;
     Ok(format!("Screenshot saved to {}", path.display()))
 }
 
