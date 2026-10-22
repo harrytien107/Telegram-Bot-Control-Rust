@@ -2026,7 +2026,7 @@ fn command_description(name: &str) -> Option<&'static str> {
     COMMANDS.iter().find(|(n, _)| *n == name).map(|(_, d)| *d)
 }
 
-const INTRODUCE: &str = "👨‍💻 DEVELOPER | LÊ PHI ANH\nDiscord: LePhiAnhDev\nTelegram: @lephianh386ht\nGitHub: https://github.com/LePhiAnhDev\n\n👨‍💻 CONTRIBUTOR: harrytien107\nDiscord: harrytien107\nTelegram: @harrytienthereal\nGitHub: https://github.com/harrytien107";
+const INTRODUCE: &str = "🦀 RUST VERSION\nDeveloper & Maintainer: harrytien107\nDiscord: harrytien107\nTelegram: @harrytienthereal\nGitHub: https://github.com/harrytien107\n\n📜 PROJECT ORIGIN\nOriginal Python project by Lê Phi Anh / LePhiAnhDev\nGitHub: https://github.com/LePhiAnhDev\n\nThis version is a native Rust rewrite with a lightweight Win32 GUI, system tray support, portable configuration, and expanded remote-control features.";
 const COMMANDS: &[(&str, &str)] = &[
     ("/introduce", "Giới thiệu về tôi."),
     ("/help", "Xem hướng dẫn chi tiết."),
