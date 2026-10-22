@@ -1,105 +1,133 @@
-# Telegram Bot Control Computer V2
+# Telegram Remote Control for Windows
 
-## Introduction
-This project is a Telegram bot that uses Selenium, Chromedriver, Nircmd and system commands to automate tasks such as browser control, system command execution, screenshot capture, file download, mouse and keyboard emulator. The following guide will help you set up, configure, and package the project.
+A lightweight Windows remote-control utility written in **Rust**. It runs as a native Win32 desktop app, lives in the system tray, and lets an authorized Telegram user control common PC functions without keeping a terminal window open.
 
----
+This repository now contains the Rust implementation only. The previous Python version has been retired.
 
-## System Requirements
-1. Latest [Python](https://www.python.org/downloads/) version
-2. [Brave](https://brave.com/) or Google Chrome browser
-3. Download [Chromedriver](https://googlechromelabs.github.io/chrome-for-testing/) using the Stable channel and make sure it is compatible with your browser version.
-4. [Nircmd](https://www.nirsoft.net/utils/nircmd-x64.zip) 64 bit version
+## Highlights
 
----
+- Native Win32 GUI with tray support and no console window
+- Portable `config.toml` stored next to the executable
+- Telegram user allow-list by user ID
+- Command groups, favorites, quick actions, contextual back buttons
+- Screenshot capture and Telegram preview actions
+- File browser, upload, download, delete, and directory listing
+- CPU, RAM, disk, uptime, battery, Wi-Fi, IP, hostname, user and process information
+- Shutdown, restart, sleep, hibernate, lock and scheduled power actions
+- Volume controls with current-volume reporting, mute/unmute and percentage control
+- Mouse control and keyboard emulator with F1-F12, navigation keys and shortcuts
+- Clipboard read/write and remote text typing
+- Spotify/media controls
+- Local Web Remote with touchpad, scrolling, double-click, current-volume slider, and keyboard controls
 
-## Installation and Configuration Guide
+## Requirements
 
-### 1. Obtain **Telegram Bot Token**
-1. Open Telegram and search for **@BotFather**.
-2. Type the command `/newbot` to create a new bot.
-3. Follow the instructions, provide a name and username for your bot.
-4. Once created, you will receive a **Token**. Save this token and add it to the line `TOKEN = 'ENTER YOUR BOT TOKEN'` in the source file.
+- Windows 10/11 x64
+- Rust toolchain with the MSVC target
+- Visual Studio Build Tools / MSVC with `rc.exe`
+- A Telegram bot token from `@BotFather`
+- [NirCmd](https://www.nirsoft.net/utils/nircmd.html) for volume, mute and monitor-off commands
 
----
+No Python, Selenium, browser driver, or Python virtual environment is required.
 
-### 2. Install Required Libraries
-Run the following command to install the necessary third-party libraries:
-`pip install pyautogui pillow nest_asyncio selenium pyinstaller pynput python-telegram-bot`
+## Build
 
----
+Open an MSVC developer environment, then build the release executable:
 
-### 3. Download and Configure Chromedriver
-1. Determine the version of Brave/Chrome you are using:
-   - Open your browser and navigate to `Settings > About Brave/Chrome` to check the version.
-2. Download the compatible Chromedriver from the [official website](https://googlechromelabs.github.io/chrome-for-testing/).
-3. Extract Chromedriver and save the path to the `chromedriver.exe` file.
+```powershell
+cd rust-gui
+cargo build --release
+```
 
-Enter this path in the line:
-CHROME_DRIVER_PATH = "CHROME_DRIVER_PATH = "ENTER YOUR PATH TO CHROMEDRIVER.EXE"
+The executable is created at:
 
----
+```text
+rust-gui\target\release\telegram-control-gui.exe
+```
 
-### 4. Configure Brave or Chrome
-1. Determine the installation path of your browser:
-   - **Brave**: Typically located at `C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe`.
-   - **Chrome**: Typically located at `C:/Program Files/Google/Chrome/Application/chrome.exe`.
-2. Enter this path in the line:
-BRAVE_PATH = "ENTER YOUR PATH TO BRAVE.EXE"
+The release profile is configured for a small binary using size optimization, Thin LTO, a single codegen unit, symbol stripping, and `panic = "abort"`.
 
----
+## NirCmd
 
-### 5. Configure Browser User Data
-1. User data contains information like cookies and browser settings, which helps the bot open your correct account.
-2. The default paths are usually:
-   - **Brave**: `C:/Users/<Your Username>/AppData/Local/BraveSoftware/Brave-Browser/User Data`.
-   - **Chrome**: `C:/Users/<Your Username>/AppData/Local/Google/Chrome/User Data`.
-3. Enter this path in the line:
-USER_DATA_DIR = "ENTER YOUR PATH TO BRAVE USER DATA"
+Download NirCmd from NirSoft and place either `nircmdc.exe` or `nircmd.exe` in:
 
----
+```text
+nircmd-x64\nircmdc.exe
+nircmd-x64\nircmd.exe
+```
 
-### 6. Download and Configure NirCmd
-1. Download NirCmd from the official website.
-2. Extract the contents and note the path to nircmdc.exe.
-3. Enter this path in the following lines of the function handle_volume_control:
-os.system("ENTER YOUR PATH TO NIRCMDC.EXE changesysvolume -3277")  # Decrease volume
-os.system("ENTER YOUR PATH TO NIRCMDC.EXE changesysvolume 3277")   # Increase volume
+A portable folder can look like this:
 
+```text
+TelegramRemoteControl\
+├─ telegram-control-gui.exe
+├─ config.toml
+└─ nircmd-x64\
+   └─ nircmdc.exe
+```
 
-### 7. Add **Telegram Token**
-Copy the token you obtained from **@BotFather** and enter it in the line:
-TOKEN = 'ENTER YOUR BOT TOKEN'
+NirCmd itself is not bundled in this repository.
 
----
+## First Run
 
-### 8. Running the Project
-1. Open a terminal in the directory containing the source file.
-2. First, check in the IDE. If everything is set up correctly, the bot will start listening for commands on Telegram. Then, it's time to package the bot.
-3. You can also run the command to start the bot in the terminal (note that the terminal running the command must be in the same folder as the TelegramBotControlComputer.py file):
-`python TelegramBotControlComputer.py`
+1. Create a Telegram bot with `@BotFather` and copy its token.
+2. Start `telegram-control-gui.exe`.
+3. Enter the bot token in **BOT TOKEN**.
+4. Enter your Telegram numeric user ID in **USER ID**.
+5. Choose download and screenshot folders.
+6. Click **SAVE**, then **START**.
 
----
+Configuration is written to `config.toml` beside the executable, so the app remains portable.
 
-### 9. Packaging the Project with PyInstaller
-1. Package the source file into a standalone `.exe` file:
-`pyinstaller --onefile TelegramBotControlComputer.py`
-2. The executable file will be saved in the `dist/TelegramBotControlComputer.exe` directory.
+Keep your bot token and `config.toml` private.
 
----
+## Telegram Usage
 
-## Notes
-1. Ensure **Chromedriver** matches your browser version. Check again if Selenium fails to launch.
-2. Make sure the paths (`CHROME_DRIVER_PATH`, `BRAVE_PATH`, `USER_DATA_DIR`, `LINE 203`, `LINE 206`, `TOKEN`) are entered correctly.
-3. Do not share your **Telegram Token** publicly to avoid unauthorized control of your bot.
-4. If you get error message "Telegram.error.Timeout: Timed out". You just need to Revoke old token and Renew new token, then everything will be fine.
+Use `/menu` for the grouped control menu. Favorites appear as direct quick actions on the main menu.
 
----
+| Command | Purpose |
+| --- | --- |
+| `/menu` | Open the grouped command menu |
+| `/status` | CPU, RAM, disk, uptime and battery |
+| `/screenshot` | Capture and send the screen |
+| `/ls` | Browse files and folders |
+| `/volume` | Volume controls and current level |
+| `/controlmouse` | Telegram mouse controls |
+| `/keyboardemulator` | Remote keyboard with special keys and shortcuts |
+| `/clipboard` | Read the Windows clipboard |
+| `/setclipboard` | Replace clipboard text |
+| `/remote` | Start the local Web Remote |
+| `/timers` | View scheduled power actions |
+
+Run `/help` or **Hiện tất cả lệnh** in the menu to see the complete command set.
+
+## Web Remote
+
+Run `/remote` or tap **🌐 Web Remote** in the Telegram menu. The bot returns a tokenized local URL for a phone or another device on the same Wi-Fi/LAN.
+
+The page provides touchpad, left/right/double click, wheel and two-finger scrolling, a volume slider initialized from the current Windows volume, text input, navigation keys, function keys and common shortcuts.
+
+Run:
+
+```text
+/remote stop
+```
+
+when finished.
+
+## Portable Data
+
+Runtime data such as `config.toml`, screenshots, downloads and NirCmd binaries stay outside Git. Build output under `target/` and packaged executables under `dist/` are ignored as well.
+
+## Security
+
+This project can execute system-control actions on the Windows PC where it runs. Use a private bot token, configure your own Telegram user ID, and do not expose the Web Remote URL to untrusted users or networks.
+
+## License
+
+See [LICENSE](LICENSE).
 
 ## Author
-**Lê Phi Anh**  
 
-## Contact for Work
-- Discord: LePhiAnhDev  
-- Telegram: @lephianh386ht  
-- GitHub: [LePhiAnhDev](https://github.com/LePhiAnhDev)
+**Lê Phi Anh**  
+GitHub: [LePhiAnhDev](https://github.com/LePhiAnhDev)
