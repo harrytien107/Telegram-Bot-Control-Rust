@@ -2,7 +2,7 @@
 
 A lightweight Windows remote-control utility written in **Rust**. It runs as a native Win32 desktop app, lives in the system tray, and lets an authorized Telegram user control common PC functions without keeping a terminal window open.
 
-This repository now contains the Rust implementation only. The previous Python version has been retired.
+This repository contains a Rust rewrite of the original Python-based Telegram PC control project by Lê Phi Anh. The current version is maintained as a native Windows application in Rust, with a lightweight Win32 GUI, tray support, portable configuration, and expanded remote-control features.
 
 ## Highlights
 
@@ -127,7 +127,6 @@ This project can execute system-control actions on the Windows PC where it runs.
 
 See [LICENSE](LICENSE).
 
-## Author
+## Project lineage
 
-**Lê Phi Anh**  
-GitHub: [LePhiAnhDev](https://github.com/LePhiAnhDev)
+The original project was implemented in Python by [Lê Phi Anh / LePhiAnhDev](https://github.com/LePhiAnhDev). This repository is the Rust rewrite maintained by [harrytien107](https://github.com/harrytien107), with the Python application replaced by a native Rust implementation.
